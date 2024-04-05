@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
+# todo: add comment for each line and/or subsection of the code
+
 file_path = r"C:\Users\Client\OneDrive - HEC Montréal\International Porfolio Management\TP2"
 
 currency_list = ["CAD", "JPY", "SEK", "CHF", "EUR", "GBP",]
@@ -44,9 +46,10 @@ forward_premium = forward_log.subtract(spot_log, axis=1, )
 forward_premium = forward_premium[~(forward_premium.index > '2020-10-31')]
 
 # Regression by currency
-results_q1 = []
+df_results_appended_q1 = []
 for i in range(len(currency_list)):
     curr = currency_list[i]
+    currency_string = curr + "/USD"
 
     delta = log_exchange_rate_change[curr]
     Y = delta.to_numpy()
@@ -64,6 +67,15 @@ for i in range(len(currency_list)):
     beta_t_value = results.tvalues[1]
     r_squared = results.rsquared
 
-    # todo: create dataframe from results (curr, constant, constant t value, beta, beta t value, r_squared)
-    #  add prefix to currency before ("/USD")
-    #  append results to results_q1
+    results_columns_q1 = ["Currency", "Constant", "Constant t-value", "Beta", "Beta t-value", "R-squared"]
+    results_array_q1 = np.array([currency_string, constant, constant_t_value, beta, beta_t_value, r_squared])
+    results_q1 = pd.DataFrame(results_array_q1.reshape(-1, len(results_array_q1)), columns=results_columns_q1, )
+
+    df_results_appended_q1.append(results_q1)
+
+q1_results = pd.concat(df_results_appended_q1, axis=0)
+
+
+"""
+Question 2 - Rolling UIP regressions
+"""
