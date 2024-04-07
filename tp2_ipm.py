@@ -3,6 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 from statsmodels.regression.rolling import RollingOLS
 import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
 
 
 def plot_graph(currency_str: str, currency: str, filepath: str, betas):
@@ -10,9 +11,22 @@ def plot_graph(currency_str: str, currency: str, filepath: str, betas):
     plt.title(fr" Rolling UIP regression for the {currency_str} pair (5-year rolling windows")
     plt.xlabel("Date")
     plt.ylabel("Coefficient of the forward premium")
-    # plt.show()
     plt.savefig(fr'{filepath}\outputs\q2_{currency}.png')
     plt.clf()
+
+
+def get_desc_stats(pf, name: str):
+    mean = np.mean(pf)
+    std_dev = np.std(pf)
+    skewness = skew(pf)
+    kurto = kurtosis(pf)
+    sharpe_ratio = mean / std_dev
+
+    columns = ["Portfolio", "Mean", "Standard Deviation", "Skewness", "Kurtosis", "Sharpe Ratio"]
+    rez = np.array([name, mean, std_dev, skewness, kurto, sharpe_ratio])
+    df_results = pd.DataFrame(rez.reshape(-1, len(rez)), columns=columns, )
+
+    return df_results
 
 
 file_path = r"C:\Users\Client\OneDrive - HEC Montréal\International Porfolio Management\TP2"
@@ -46,16 +60,12 @@ log_exchange_rate_change = spot_log_shifted.subtract(spot_log, axis=1).dropna()
 forward_log_shifted = forward_log.shift(periods=1)
 log_excess_returns = forward_log_shifted.subtract(spot_log, axis=1).dropna()
 
-# Drop rows after 2020-10
-log_exchange_rate_change = log_exchange_rate_change[~(log_exchange_rate_change.index > '2020-10-31')]
-log_excess_returns = log_excess_returns[~(log_excess_returns.index > '2020-10-31')]
-
 """
 Question 1 - Full-sample UIP regressions
 """
 # Calculate forward premium
-forward_premium = forward_log.subtract(spot_log, axis=1, )
-forward_premium = forward_premium[~(forward_premium.index > '2020-10-31')]
+forward_discount = forward_log.subtract(spot_log, axis=1, )
+forward_discount = forward_discount[~(forward_discount.index > '2020-10-31')]
 
 # Regression by currency
 df_results_appended_q1 = []
@@ -64,9 +74,10 @@ for i in range(len(currency_list)):
     currency_string = curr + "/USD"
 
     delta = log_exchange_rate_change[curr]
+    delta = delta[~(delta.index > '2020-10-31')]
     y = delta.to_numpy()
 
-    fp = forward_premium[curr]
+    fp = forward_discount[curr]
     x = fp.to_numpy()[:-1].copy()
     x = sm.add_constant(x)
 
@@ -87,30 +98,134 @@ for i in range(len(currency_list)):
 
 q1_results = pd.concat(df_results_appended_q1, axis=0)
 
-
 """
 Question 2 - Rolling UIP regressions
 """
+
 # Regression by currency
 for i in range(len(currency_list)):
     curr = currency_list[i]
     currency_string = curr + "/USD"
 
     delta = log_exchange_rate_change[curr]
+    delta = delta[~(delta.index > '2020-10-31')]
     y = delta
 
-    fp = forward_premium[curr]
-    x_var = fp[1:].copy()
+    fp = forward_discount[curr]
+    x_var = fp.copy()
+    x_var = x_var.shift(periods=1)
+    x_var = x_var.dropna()
     x = sm.add_constant(x_var)
 
     model_q2 = RollingOLS(y, x, window=60, )
     results_q2 = model_q2.fit()
 
-    varr = results_q2.params[curr].dropna()
+    beta_forward_premium = results_q2.params[curr].dropna()
 
-    varr.index = pd.to_datetime(varr.index)
+    beta_forward_premium.index = pd.to_datetime(beta_forward_premium.index)
 
     plot_graph(currency_str=currency_string,
                currency=curr,
                filepath=file_path,
-               betas=varr, )
+               betas=beta_forward_premium, )
+
+
+"""
+Question 3 - Carry trade portfolios
+"""
+# Allocate currencies to portfolio based on their forward discount
+forward_discount_ranked = forward_discount.rank(ascending=False, method='first', axis=1)
+
+# Portfolio #1
+pf_one = forward_discount_ranked.copy()
+pf_one[pf_one < 5] = 0
+pf_one[pf_one > 0] = 0.5
+pf_one_forward_discount = forward_discount.mul(pf_one, axis=1).sum(axis=1)
+
+# Portfolio #2
+pf_two = forward_discount_ranked.copy()
+pf_two[pf_two > 4] = 0
+pf_two[pf_two < 3] = 0
+pf_two[pf_two > 0] = 0.5
+pf_two_forward_discount = forward_discount.mul(pf_two, axis=1).sum(axis=1)
+
+# Portfolio #2
+pf_three = forward_discount_ranked.copy()
+pf_three[pf_three > 2] = 0
+pf_three[pf_three > 0] = 0.5
+pf_three_forward_discount = forward_discount.mul(pf_three, axis=1).sum(axis=1)
+
+# High Minus Low
+hml_forward_discount = pf_three_forward_discount - pf_one_forward_discount
+
+# Dollar Factor
+dollar_factor_pf = forward_discount_ranked.copy()
+dollar_factor_pf[dollar_factor_pf > 0] = 1 / 6
+dollar_factor_forward_discount = forward_discount.mul(dollar_factor_pf, axis=1).sum(axis=1)
+
+
+# Descriptive Statistics
+one = get_desc_stats(pf=pf_one_forward_discount, name="Portfolio #1")
+two = get_desc_stats(pf=pf_two_forward_discount, name="Portfolio #2")
+three = get_desc_stats(pf=pf_three_forward_discount, name="Portfolio #3")
+hml = get_desc_stats(pf=hml_forward_discount, name="High-minus-Low")
+dollar_factor = get_desc_stats(pf=dollar_factor_forward_discount, name="Dollar Factor")
+
+q3_results = pd.concat([one, two, three, hml, dollar_factor], axis=0)
+
+
+"""
+Question 4 - Momentum portfolios
+"""
+returns = log_exchange_rate_change.copy()
+returns = returns[~(returns.index > '2020-10-31')]
+
+# Allocate currencies to portfolio based on their lagged returns
+lagged_returns_ranked = returns.rank(ascending=False, method='first', axis=1)
+lagged_returns_ranked = lagged_returns_ranked.shift(periods=1)  # shift to match lagged return with current period
+
+# Modify dataframes
+lagged_returns_ranked = lagged_returns_ranked.dropna()
+returns = returns[1:]
+
+# Portfolio #1
+pf_one = lagged_returns_ranked.copy()
+pf_one[pf_one < 5] = 0
+pf_one[pf_one > 0] = 0.5
+pf_one_ret = returns.mul(pf_one, axis=1).sum(axis=1)
+
+# Portfolio #2
+pf_two = lagged_returns_ranked.copy()
+pf_two[pf_two > 4] = 0
+pf_two[pf_two < 3] = 0
+pf_two[pf_two > 0] = 0.5
+pf_two_ret = returns.mul(pf_two, axis=1).sum(axis=1)
+
+# Portfolio #2
+pf_three = lagged_returns_ranked.copy()
+pf_three[pf_three > 2] = 0
+pf_three[pf_three > 0] = 0.5
+pf_three_ret = returns.mul(pf_three, axis=1).sum(axis=1)
+
+# High Minus Low
+hml_ret = pf_three_ret - pf_one_ret
+
+# Dollar Factor
+dollar_factor_pf = lagged_returns_ranked.copy()
+dollar_factor_pf[dollar_factor_pf > 0] = 1 / 6
+dollar_factor_ret = returns.mul(dollar_factor_pf, axis=1).sum(axis=1)
+
+
+# Descriptive Statistics
+one = get_desc_stats(pf=pf_one_ret, name="Portfolio #1")
+two = get_desc_stats(pf=pf_two_ret, name="Portfolio #2")
+three = get_desc_stats(pf=pf_three_ret, name="Portfolio #3")
+hml = get_desc_stats(pf=hml_ret, name="High-minus-Low")
+dollar_factor = get_desc_stats(pf=dollar_factor_ret, name="Dollar Factor")
+
+q4_results = pd.concat([one, two, three, hml, dollar_factor], axis=0)
+
+
+"""
+Question 5 - Two-stage regressions
+"""
