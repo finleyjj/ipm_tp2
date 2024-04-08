@@ -32,8 +32,6 @@ def get_desc_stats(pf, name: str):
 file_path = r"C:\Users\Client\OneDrive - HEC Montréal\International Porfolio Management\TP2"
 currency_list = ["CAD", "JPY", "SEK", "CHF", "EUR", "GBP", ]
 
-# todo: add comment for each line and/or subsection of the code
-
 
 """
 Import spots and forward data
@@ -229,3 +227,55 @@ q4_results = pd.concat([one, two, three, hml, dollar_factor], axis=0)
 """
 Question 5 - Two-stage regressions
 """
+# Load data
+df_q5 = pd.read_csv(filepath_or_buffer=rf"{file_path}\q5_data.csv", sep=";", )
+
+# Extract column name for iterations
+columns_list = list(df_q5.columns)
+portfolio_list = [x for x in columns_list if x.startswith("Portfolio")]
+
+# Restrict Sample
+df_q5 = df_q5.set_index("Dates")
+df_q5.index = pd.to_datetime(df_q5.index)
+df_q5 = df_q5[~(df_q5.index < '1984-12-01')]
+df_q5 = df_q5[~(df_q5.index > '2020-10-31')]
+
+
+""" 5.1 & 5.2 & 5.3"""
+betas_q5 = []
+for i in range(len(portfolio_list)):
+    pf5 = portfolio_list[i]
+
+    y5 = df_q5[pf5]
+
+    x5 = df_q5[["rx", "hml"]]
+    x5 = sm.add_constant(x5)
+
+    model5 = sm.OLS(y5, x5)
+    results5 = model5.fit()
+
+    rx = results5.params["rx"]
+    hml = results5.params["hml"]
+
+    average_return = np.mean(y5)
+
+    results_columns_q5 = ["Portfolio", "rx", "hml", "average_return"]
+    results_array_q5 = np.array([pf5, rx, hml, average_return, ])
+    results_q5 = pd.DataFrame(results_array_q5.reshape(-1, len(results_array_q5)), columns=results_columns_q5, )
+
+    betas_q5.append(results_q5)
+
+df_betas = pd.concat(betas_q5, axis=0).reset_index(drop=True, )
+
+""" 5.4 """
+y54 = df_betas["average_return"]
+
+x54 = df_betas[["rx", "hml"]]
+x54 = sm.add_constant(x54)
+
+model54 = sm.OLS(y54.astype(float), x54.astype(float))
+results54 = model54.fit()
+
+print(results54.summary())
+
+
