@@ -4,6 +4,7 @@ import statsmodels.api as sm
 from statsmodels.regression.rolling import RollingOLS
 import matplotlib.pyplot as plt
 from scipy.stats import skew, kurtosis
+from datetime import datetime
 
 
 def plot_graph(currency_str: str, currency: str, filepath: str, betas):
@@ -279,3 +280,61 @@ results54 = model54.fit()
 print(results54.summary())
 
 
+"""
+Q6 - Stock returns and USD betas
+"""
+
+""" 6.1 - Regressions """
+# Load data
+df_names = pd.read_csv(filepath_or_buffer=rf"{file_path}\firm_950_names.csv", sep=",", )
+df_returns = pd.read_csv(filepath_or_buffer=rf"{file_path}\firms_950_rets_prices.csv", sep=",", )
+
+# Prepare data
+df_returns['DateTime'] = pd.to_datetime(df_returns['date'].astype(str), format='%Y%m%d')
+df_returns = df_returns.set_index("DateTime")
+df_returns = df_returns[~(df_returns.index < '2000-01-01')]
+df_returns = df_returns[~(df_returns.index > '2016-01-01')]
+df_ret_q6 = df_returns[["permno", "ret"]]
+
+dollar_factor_q6 = dollar_factor_ret.copy().to_frame()
+dollar_factor_q6 = dollar_factor_q6[~(dollar_factor_q6.index < '2000-01-01')]
+dollar_factor_q6 = dollar_factor_q6[~(dollar_factor_q6.index > '2016-01-01')]
+dollar_factor_q6.index = dollar_factor_q6.index.astype('datetime64[ns]')
+
+firm_list = df_ret_q6.copy()
+firm_list = firm_list["permno"].unique().tolist()
+
+# Regression
+betas_q6 = []
+for i in range(len(firm_list)):
+    firm = firm_list[i]
+    firm_ret = df_ret_q6[df_ret_q6["permno"] == firm]
+    y6 = firm_ret["ret"].to_numpy()
+
+    x6 = dollar_factor_q6.to_numpy()
+    x6 = sm.add_constant(x6)
+
+    if np.isnan(y6).any():  # drop firm if returns contain NaN
+        pass
+    else:
+
+        model6 = sm.OLS(y6, x6)
+        results6 = model6.fit()
+
+        ret_beta = results6.params[1]
+
+        results_columns_q6 = ["permno", "ret_beta", ]
+        results_array_q6 = np.array([firm, ret_beta, ])
+        results_q6 = pd.DataFrame(results_array_q6.reshape(-1, len(results_array_q6)), columns=results_columns_q6, )
+
+        betas_q6.append(results_q6)
+
+df_betas_q6 = pd.concat(betas_q6, axis=0).reset_index(drop=True, )
+
+""" 6.2 - Ten portfolios """
+# Rank firms by betas
+df_ranked = df_betas_q6.copy()
+df_ranked["rank"] = df_ranked["ret_beta"].rank(ascending=True, method='first', )
+df_ranked['group'] = pd.cut(df_ranked['rank'], 10, labels=False) + 1
+
+# Add market capitalization
