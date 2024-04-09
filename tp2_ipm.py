@@ -148,7 +148,7 @@ pf_two[pf_two < 3] = 0
 pf_two[pf_two > 0] = 0.5
 pf_two_forward_discount = forward_discount.mul(pf_two, axis=1).sum(axis=1)
 
-# Portfolio #2
+# Portfolio #3
 pf_three = forward_discount_ranked.copy()
 pf_three[pf_three > 2] = 0
 pf_three[pf_three > 0] = 0.5
@@ -272,7 +272,6 @@ df_betas = pd.concat(betas_q5, axis=0).reset_index(drop=True, )
 y54 = df_betas["average_return"]
 
 x54 = df_betas[["rx", "hml"]]
-x54 = sm.add_constant(x54)
 
 model54 = sm.OLS(y54.astype(float), x54.astype(float))
 results54 = model54.fit()
