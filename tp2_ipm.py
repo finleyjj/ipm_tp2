@@ -8,7 +8,7 @@ from statsmodels.regression.rolling import RollingOLS
 
 def plot_graph(currency_str: str, currency: str, filepath: str, betas):
     plt.plot(betas.index, betas)
-    plt.title(fr" Rolling UIP regression for the {currency_str} pair (5-year rolling windows")
+    plt.title(fr" Rolling UIP regression for the {currency_str} pair (5-year rolling windows)")
     plt.xlabel("Date")
     plt.ylabel("Coefficient of the forward premium")
     plt.savefig(fr'{filepath}\outputs\q2_{currency}.png')
@@ -273,7 +273,7 @@ for i in range(len(portfolio_list)):
 df_betas = pd.concat(betas_q5, axis=0).reset_index(drop=True, )
 
 """ 5.4 """
-y54 = df_betas["average_return"]
+y54 = df_betas["average_return"].astype(float) * 12
 
 x54 = df_betas[["rx", "hml"]]
 
@@ -380,9 +380,14 @@ for i in range(len(group_list)):
         df_weight["weighted_returns"] = df_weight["weight"] * df_weight["ret"]
         total_return_by_date_portfolio = df_weight["weighted_returns"].sum()
 
+        # Merge Beta
+        df_beta_merged = df_weight.merge(df_betas_q6, how='left', left_on='permno', right_on='permno', indicator=False, )
+        df_beta_merged["weighted_beta"] = df_beta_merged["weight"] * df_beta_merged["ret_beta"]
+        total_weight_beta_by_date_portfolio = df_beta_merged["weighted_beta"].sum()
+
         # Create frame to append
-        results_columns_q63 = ["Portfolio", "Date", "Return", ]
-        results_array_q63 = np.array([group_name, dt, total_return_by_date_portfolio, ])
+        results_columns_q63 = ["Portfolio", "Date", "Return", "Beta", ]
+        results_array_q63 = np.array([group_name, dt, total_return_by_date_portfolio, total_weight_beta_by_date_portfolio])
         results_q63 = pd.DataFrame(results_array_q63.reshape(-1, len(results_array_q63)), columns=results_columns_q63, )
 
         returns_by_pf.append(results_q63)
