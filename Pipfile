@@ -8,6 +8,7 @@ pandas = "*"
 numpy = "*"
 statsmodels = "*"
 matplotlib = "*"
+scipy = "*"
 
 [dev-packages]
 

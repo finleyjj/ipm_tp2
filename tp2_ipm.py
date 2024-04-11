@@ -1,10 +1,9 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from statsmodels.regression.rolling import RollingOLS
-import matplotlib.pyplot as plt
 from scipy.stats import skew, kurtosis
-from datetime import datetime
+from statsmodels.regression.rolling import RollingOLS
 
 
 def plot_graph(currency_str: str, currency: str, filepath: str, betas):
@@ -69,9 +68,11 @@ forward_discount = forward_discount[~(forward_discount.index > '2020-10-31')]
 # Regression by currency
 df_results_appended_q1 = []
 for i in range(len(currency_list)):
+    # Identify currency
     curr = currency_list[i]
     currency_string = curr + "/USD"
 
+    # Prepare regression inputs
     delta = log_exchange_rate_change[curr]
     delta = delta[~(delta.index > '2020-10-31')]
     y = delta.to_numpy()
@@ -80,15 +81,18 @@ for i in range(len(currency_list)):
     x = fp.to_numpy()[:-1].copy()
     x = sm.add_constant(x)
 
+    # Initialize and run model
     model = sm.OLS(y, x)
     results = model.fit()
 
+    # Extract outputs and coefficients
     constant = results.params[0]
     constant_t_value = results.tvalues[0]
     beta = results.params[1]
     beta_t_value = results.tvalues[1]
     r_squared = results.rsquared
 
+    # Prepare results' dataframe to append
     results_columns_q1 = ["Currency", "Constant", "Constant t-value", "Beta", "Beta t-value", "R-squared"]
     results_array_q1 = np.array([currency_string, constant, constant_t_value, beta, beta_t_value, r_squared])
     results_q1 = pd.DataFrame(results_array_q1.reshape(-1, len(results_array_q1)), columns=results_columns_q1, )
