@@ -291,9 +291,9 @@ df_returns = pd.read_csv(filepath_or_buffer=rf"{file_path}\firms_950_rets_prices
 # Prepare data
 df_returns['DateTime'] = pd.to_datetime(df_returns['date'].astype(str), format='%Y%m%d')
 df_returns = df_returns.set_index("DateTime")
-df_returns = df_returns[~(df_returns.index < '2000-01-01')]
-df_returns = df_returns[~(df_returns.index > '2016-01-01')]
-df_ret_q6 = df_returns[["permno", "ret"]]
+df_ret_q6 = df_returns[~(df_returns.index < '2000-01-01')]
+df_ret_q6 = df_ret_q6[~(df_ret_q6.index > '2016-01-01')]
+df_ret_q6 = df_ret_q6[["permno", "ret"]]
 
 dollar_factor_q6 = dollar_factor_ret.copy().to_frame()
 dollar_factor_q6 = dollar_factor_q6[~(dollar_factor_q6.index < '2000-01-01')]
@@ -330,10 +330,90 @@ for i in range(len(firm_list)):
 
 df_betas_q6 = pd.concat(betas_q6, axis=0).reset_index(drop=True, )
 
-""" 6.2 - Ten portfolios """
+""" 6.2 & 6.3 - Ten portfolios """
 # Rank firms by betas
 df_ranked = df_betas_q6.copy()
 df_ranked["rank"] = df_ranked["ret_beta"].rank(ascending=True, method='first', )
 df_ranked['group'] = pd.cut(df_ranked['rank'], 10, labels=False) + 1
 
-# Add market capitalization
+# Create unique date list and prepare data for return calculation
+df_ret_oos = df_returns[~(df_returns.index < '2015-02-01')]
+df_ret_oos = df_ret_oos[~(df_ret_oos.index > '2020-11-01')]
+
+# Create list for iteration purpose
+date_list = df_ret_oos.index.unique().to_list()
+group_list = np.arange(1, 11, 1).tolist()
+
+returns_by_pf = []
+# Loop to calculate returns
+for i in range(len(group_list)):
+    # Identify Portfolio
+    group = group_list[i]
+    group_name = fr"Portfolio {group}"
+
+    # Identify firms in identified portfolio
+    group_firm = df_ranked.copy()
+    group_firm_list = group_firm["permno"][group_firm["group"] == group].to_list()
+
+    # Filter df_ret_oos and firm
+    df_ret_mc = df_ret_oos[df_ret_oos["permno"].isin(group_firm_list)]
+
+    for j in range(len(date_list)):
+        # Identify date
+        dt = date_list[j]
+
+        # Filter df_ret_oos by date and firm
+        df_ret_mc_dt = df_ret_mc[df_ret_mc.index == dt]
+
+        # Calculate Market Cap
+        df_weight = df_ret_mc_dt.copy()
+        df_weight["market_cap"] = df_weight["prc"] * df_weight["shrout"]
+
+        # Calculate weight by market capitalization
+        df_weight["weight"] = df_weight["market_cap"] / df_weight["market_cap"].sum()
+
+        # Calculate weighted returns
+        df_weight["weighted_returns"] = df_weight["weight"] * df_weight["ret"]
+        total_return_by_date_portfolio = df_weight["weighted_returns"].sum()
+
+        # Create frame to append
+        results_columns_q63 = ["Portfolio", "Date", "Return", ]
+        results_array_q63 = np.array([group_name, dt, total_return_by_date_portfolio, ])
+        results_q63 = pd.DataFrame(results_array_q63.reshape(-1, len(results_array_q63)), columns=results_columns_q63, )
+
+        returns_by_pf.append(results_q63)
+
+
+returns_by_pf_date = pd.concat(returns_by_pf, axis=0).set_index("Date")
+
+
+""" 6.4 - Correlation """
+# Prepare dollar factor date
+dollar_factor_q64 = dollar_factor_ret.copy().to_frame()
+dollar_factor_q64 = dollar_factor_q64[~(dollar_factor_q64.index < '2015-02-01')]
+dollar_factor_q64 = dollar_factor_q64[~(dollar_factor_q64.index > '2020-11-01')]
+dollar_factor_q64.index = dollar_factor_q64.index.astype('datetime64[ns]')
+
+
+correlation_by_pf = []
+# Loop to calculate returns
+for i in range(len(group_list)):
+    # Identify Portfolio
+    group = group_list[i]
+    group_name = fr"Portfolio {group}"
+
+    # Filter for portfolio
+    df_ret_by_pf = returns_by_pf_date[returns_by_pf_date["Portfolio"] == group_name]
+
+    # Calculate correlation
+    corr = np.corrcoef(df_ret_by_pf["Return"].astype("float"), dollar_factor_q64[0])
+    corr_coef = corr[0, 1, ]
+
+    # Create frame to append
+    results_columns_q64 = ["Portfolio", "Correlation", ]
+    results_array_q64 = np.array([group_name, corr_coef, ])
+    results_q64 = pd.DataFrame(results_array_q64.reshape(-1, len(results_array_q64)), columns=results_columns_q64, )
+
+    correlation_by_pf.append(results_q64)
+
+df_correlation = pd.concat(correlation_by_pf, axis=0)
